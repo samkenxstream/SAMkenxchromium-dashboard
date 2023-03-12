@@ -16,9 +16,10 @@ import logging
 from google.cloud import ndb  # type: ignore
 
 from framework.basehandlers import FlaskHandler
-from internals import approval_defs
-from internals.core_models import Feature, FeatureEntry, MilestoneSet, Stage
-from internals.review_models import Activity, Approval, Comment, Gate, Vote
+from internals import approval_defs, stage_helpers
+from internals.core_models import FeatureEntry, MilestoneSet, Stage
+from internals.legacy_models import Feature, Approval, Comment
+from internals.review_models import Activity, Gate, Vote
 from internals.core_enums import *
 
 # Gate type enums (declared in approval_defs.py)
@@ -517,8 +518,6 @@ class WriteMissingGates(FlaskHandler):
 
     existing_api_prototype_gates = Gate.query(
         Gate.gate_type == GATE_API_PROTOTYPE).fetch()
-    existing_adoption_ship_gates = Gate.query(
-        Gate.gate_type == GATE_ADOPTION_SHIP).fetch()
     existing_privacy_ot_gates = Gate.query(
         Gate.gate_type == GATE_PRIVACY_ORIGIN_TRIAL).fetch()
     existing_privacy_ship_gates = Gate.query(
@@ -631,3 +630,143 @@ class CreateTrialExtensionStages(FlaskHandler):
 
     return (f'{stages_created} extension stages created for '
         'existing trial stages.')
+
+
+class MigrateSubjectLineField(FlaskHandler):
+
+  def get_template_data(self, **kwargs) -> str:
+    """Migrates old Feature subject line fields to their respective stages."""
+    self.require_cron_header()
+
+    count = 0
+    for f in Feature.query():
+      f_id = f.key.integer_id()
+      f_type = f.feature_type
+
+      # If there are no subject line fields present, no need to migrate.
+      if (not f.intent_to_implement_subject_line and
+          not f.intent_to_ship_subject_line and
+          not f.intent_to_experiment_subject_line and
+          not f.intent_to_extend_experiment_subject_line):
+        continue
+
+      stages_to_update = []
+      stages = stage_helpers.get_feature_stages(f_id)
+
+      # Check each corresponding FeatureEntry stage to migrate the
+      # intent subject line if needed.
+      proto_stage_type = STAGE_TYPES_PROTOTYPE[f_type] or -1
+      prototype_stages = stages.get(proto_stage_type, [])
+      if (f.intent_to_implement_subject_line and
+          # If there are more than 1 stage for a specific stage type,
+          # we can't be sure which is the correct intent, so don't migrate.
+          # (this should be very rare).
+          len(prototype_stages) == 1 and
+          not prototype_stages[0].intent_subject_line):
+        prototype_stages[0].intent_subject_line = (
+            f.intent_to_implement_subject_line)
+        stages_to_update.append(prototype_stages[0])
+
+      ship_stage_type = STAGE_TYPES_SHIPPING[f_type] or -1
+      ship_stages = stages.get(ship_stage_type, [])
+      if (f.intent_to_ship_subject_line and
+          len(ship_stages) == 1 and
+          not ship_stages[0].intent_subject_line):
+        ship_stages[0].intent_subject_line = (
+            f.intent_to_ship_subject_line)
+        stages_to_update.append(ship_stages[0])
+
+      ot_stage_type = STAGE_TYPES_ORIGIN_TRIAL[f_type] or -1
+      ot_stages = stages.get(ot_stage_type, [])
+      if (f.intent_to_experiment_subject_line and
+          len(ot_stages) == 1 and
+          not ot_stages[0].intent_subject_line):
+        ot_stages[0].intent_subject_line = (
+            f.intent_to_experiment_subject_line)
+        stages_to_update.append(ot_stages[0])
+
+      extension_stage_type = STAGE_TYPES_EXTEND_ORIGIN_TRIAL[f_type] or -1
+      extension_stages = stages.get(extension_stage_type, [])
+      if (f.intent_to_extend_experiment_subject_line and
+          len(extension_stages) == 1 and
+          not extension_stages[0].intent_subject_line):
+        extension_stages[0].intent_subject_line = (
+            f.intent_to_extend_experiment_subject_line)
+        stages_to_update.append(extension_stages[0])
+
+      # Save changes to all updated Stage entities.
+      if stages_to_update:
+        ndb.put_multi(stages_to_update)
+        count += len(stages_to_update)
+
+    return f'{count} subject line fields migrated.'
+
+
+class MigrateLGTMFields(FlaskHandler):
+
+  def get_template_data(self, **kwargs) -> str:
+    """Migrates old Feature subject lgtms to their respective votes."""
+    self.require_cron_header()
+
+    count = 0
+    votes_to_create = []
+    vote_dict = self.get_vote_dict()
+    features = Feature.query()
+    for f in features:
+      if not f.i2e_lgtms:
+        continue
+      for email in f.i2e_lgtms:
+        if self.has_existing_vote(email, GATE_API_ORIGIN_TRIAL, f, vote_dict):
+          continue
+
+        # i2e_lgtms (Intent to Experiment)'s gate_type is GATE_API_ORIGIN_TRIAL.
+        votes_to_create.append(self.create_new_vote(
+            email, GATE_API_ORIGIN_TRIAL, f))
+        count += 1
+
+    for f in features:
+      if not f.i2s_lgtms:
+        continue
+      for email in f.i2s_lgtms:
+        if self.has_existing_vote(email, GATE_API_SHIP, f, vote_dict):
+          continue
+
+        # i2s_lgtms (Intent to Ship)'s gate_type is GATE_API_SHIP.
+        votes_to_create.append(self.create_new_vote(
+            email, GATE_API_SHIP, f))
+        count += 1
+
+    # Only create 100 votes at a time.
+    votes_to_create = votes_to_create[:100]
+    for new_vote in votes_to_create:
+      approval_defs.set_vote(new_vote.feature_id, new_vote.gate_type,
+                             new_vote.state, new_vote.set_by)
+    return f'{len(votes_to_create)} of {count} lgtms fields migrated.'
+
+  def get_vote_dict(self):
+    vote_dict = {}
+    votes = Vote.query().fetch(None)
+    for vote in votes:
+      if vote.feature_id in vote_dict:
+        vote_dict[vote.feature_id].append(vote)
+      else:
+        vote_dict[vote.feature_id] = [vote]
+    return vote_dict
+
+  def has_existing_vote(self, email, gate_type, f, vote_dict):
+    f_id = f.key.integer_id()
+    if f_id not in vote_dict:
+      return False
+
+    for v in vote_dict[f_id]:
+      # Check if set by the same reviewer and the same gate_type.
+      if v.set_by == email and v.gate_type == gate_type:
+        return True
+
+    return False
+
+  def create_new_vote(self, email, gate_type, f):
+    f_id = f.key.integer_id()
+    vote = Vote(feature_id=f_id, gate_type=gate_type,
+                state=Vote.APPROVED, set_by=email)
+    return vote
