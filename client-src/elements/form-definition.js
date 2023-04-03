@@ -47,7 +47,7 @@ export function formatFeatureForEdit(feature) {
 
     tag_review_status: feature.tag_review_status_int,
     security_review_status: feature.security_review_status_int,
-    privacy_review_status: feature.security_review_status_int,
+    privacy_review_status: feature.privacy_review_status_int,
 
     // from feature.resources
     sample_links: feature.resources.samples,
@@ -129,30 +129,6 @@ export const ENTERPRISE_NEW_FEATURE_FORM_FIELDS = [
   'editors',
   'launch_bug_url',
   'enterprise_feature_categories',
-  'breaking_change',
-];
-
-// The fields shown to the user when verifying the accuracy of a feature.
-export const VERIFY_ACCURACY_FORM_FIELDS = [
-  'summary',
-  'owner',
-  'editors',
-  'cc_recipients',
-  'impl_status_chrome',
-  'dt_milestone_android_start',
-  'dt_milestone_desktop_start',
-  'dt_milestone_ios_start',
-  'ot_milestone_android_start',
-  'ot_milestone_android_end',
-  'ot_milestone_desktop_start',
-  'ot_milestone_desktop_end',
-  'ot_milestone_webview_start',
-  'ot_milestone_webview_end',
-  'shipped_android_milestone',
-  'shipped_ios_milestone',
-  'shipped_milestone',
-  'shipped_webview_milestone',
-  'accurate_as_of',
 ];
 
 // The fields that are available to every feature.
@@ -303,7 +279,7 @@ const FLAT_DEV_TRIAL_FIELDS = {
         'dt_milestone_desktop_start',
         'dt_milestone_android_start',
         'dt_milestone_ios_start',
-        'ready_for_trial_url',
+        'announcement_url',
       ],
       isImplementationSection: true,
       implStatusValue: IMPLEMENTATION_STATUS.BEHIND_A_FLAG[0],
@@ -321,6 +297,7 @@ const FLAT_ORIGIN_TRIAL_FIELDS = {
     {
       name: 'Origin trial',
       fields: [
+        'display_name',
         'experiment_goals',
         'experiment_risks',
         'ongoing_constraints',
@@ -384,6 +361,7 @@ const FLAT_PREPARE_TO_SHIP_FIELDS = {
     {
       name: 'Prepare to ship',
       fields: [
+        'display_name',
         // Standardization
         'tag_review_status',
         'webview_risks',
@@ -423,6 +401,7 @@ export const FLAT_ENTERPRISE_PREPARE_TO_SHIP_FIELDS = {
     {
       name: 'Start feature rollout',
       fields: [
+        'rollout_impact',
         'rollout_milestone',
         'rollout_platforms',
         'rollout_details',
@@ -531,7 +510,7 @@ const DEPRECATION_DEV_TRIAL_FIELDS = {
         'dt_milestone_desktop_start',
         'dt_milestone_android_start',
         'dt_milestone_ios_start',
-        'ready_for_trial_url',
+        'announcement_url',
       ],
       isImplementationSection: true,
       implStatusValue: IMPLEMENTATION_STATUS.BEHIND_A_FLAG[0],
@@ -546,6 +525,7 @@ const DEPRECATION_ORIGIN_TRIAL_FIELDS = {
     {
       name: 'Origin trial',
       fields: [
+        'display_name',
         'experiment_goals',
         'experiment_risks',
         'ongoing_constraints',
@@ -580,6 +560,7 @@ const DEPRECATION_PREPARE_TO_SHIP_FIELDS = {
     {
       name: 'Prepare to ship',
       fields: [
+        'display_name',
         'intent_to_ship_url',
         'i2s_lgtms',
       ],
@@ -595,6 +576,101 @@ const DEPRECATION_PREPARE_TO_SHIP_FIELDS = {
       ],
       isImplementationSection: true,
       implStatusValue: IMPLEMENTATION_STATUS.ENABLED_BY_DEFAULT[0],
+    },
+  ],
+};
+
+// ****************************
+// ** Verify Accuracy fields **
+// ****************************
+// The fields shown to the user when verifying the accuracy of a feature.
+// Only one stage can be used for each definition object, so
+// multiple definitions exist for each stage that might be updated.
+export const VERIFY_ACCURACY_METADATA_FIELDS = {
+  name: 'Feature Metadata',
+  sections: [
+    {
+      name: 'Feature Metadata',
+      fields: [
+        'summary',
+        'owner',
+        'editors',
+        'cc_recipients',
+        'impl_status_chrome',
+      ],
+    },
+  ],
+};
+
+const VERIFY_ACCURACY_DEV_TRIAL_FIELDS = {
+  name: 'Dev trials and iterate on design',
+  sections: [
+    {
+      name: 'Dev trials milestones',
+      fields: [
+        'dt_milestone_android_start',
+        'dt_milestone_desktop_start',
+        'dt_milestone_ios_start',
+      ],
+    },
+  ],
+};
+
+const VERIFY_ACCURACY_ORIGIN_TRIAL_FIELDS = {
+  name: 'Origin trial',
+  sections: [
+    {
+      name: 'Origin trial milestones',
+      fields: [
+        'ot_milestone_android_start',
+        'ot_milestone_android_end',
+        'ot_milestone_desktop_start',
+        'ot_milestone_desktop_end',
+        'ot_milestone_webview_start',
+        'ot_milestone_webview_end',
+      ],
+    },
+  ],
+};
+
+export const VERIFY_ACCURACY_TRIAL_EXTENSION_FIELDS = {
+  name: 'Trial extension',
+  sections: [
+    {
+      name: 'Trial extension milestones',
+      fields: [
+        'extension_desktop_last',
+        'extension_android_last',
+        'extension_webview_last',
+      ],
+    },
+  ],
+};
+
+const VERIFY_ACCURACY_PREPARE_TO_SHIP_FIELDS = {
+  name: 'Prepare to ship',
+  sections: [
+    {
+      name: 'Shipping milestones',
+      fields: [
+        'shipped_android_milestone',
+        'shipped_ios_milestone',
+        'shipped_milestone',
+        'shipped_webview_milestone',
+      ],
+    },
+  ],
+};
+
+// A single form to display the checkbox for verifying accuracy at the end.
+export const VERIFY_ACCURACY_CONFIRMATION_FIELD = {
+  name: 'Verify Accuracy',
+  sections: [
+    {
+      name: 'Verify Accuracy',
+      fields: [
+        'accurate_as_of',
+      ],
     },
   ],
 };
@@ -638,7 +714,7 @@ const STAGE_DEP_SHIPPING = 460;
 
 // Define enterprise feature processes.
 // Note: This stage can ge added to any feature that is following any process.
-const STAGE_ENT_ROLLOUT = 1061;
+export const STAGE_ENT_ROLLOUT = 1061;
 const STAGE_ENT_SHIPPED = 1070;
 
 export const FORMS_BY_STAGE_TYPE = {
@@ -690,6 +766,31 @@ export const CREATEABLE_STAGES = {
   [FEATURE_TYPES.FEATURE_TYPE_ENTERPRISE_ID[0]]: [
     STAGE_ENT_ROLLOUT,
   ],
+};
+
+export const STAGE_TYPES_ORIGIN_TRIAL = new Set([
+  STAGE_BLINK_ORIGIN_TRIAL,
+  STAGE_FAST_ORIGIN_TRIAL,
+  STAGE_DEP_DEPRECATION_TRIAL,
+]);
+
+export const VERIFY_ACCURACY_FORMS_BY_STAGE_TYPE = {
+  [STAGE_BLINK_DEV_TRIAL]: VERIFY_ACCURACY_DEV_TRIAL_FIELDS,
+  [STAGE_BLINK_ORIGIN_TRIAL]: VERIFY_ACCURACY_ORIGIN_TRIAL_FIELDS,
+  [STAGE_BLINK_SHIPPING]: VERIFY_ACCURACY_PREPARE_TO_SHIP_FIELDS,
+
+  [STAGE_FAST_DEV_TRIAL]: VERIFY_ACCURACY_DEV_TRIAL_FIELDS,
+  [STAGE_FAST_ORIGIN_TRIAL]: VERIFY_ACCURACY_ORIGIN_TRIAL_FIELDS,
+  [STAGE_FAST_SHIPPING]: VERIFY_ACCURACY_PREPARE_TO_SHIP_FIELDS,
+
+  [STAGE_PSA_DEV_TRIAL]: VERIFY_ACCURACY_DEV_TRIAL_FIELDS,
+  [STAGE_PSA_SHIPPING]: VERIFY_ACCURACY_PREPARE_TO_SHIP_FIELDS,
+
+  [STAGE_DEP_DEV_TRIAL]: VERIFY_ACCURACY_DEV_TRIAL_FIELDS,
+  [STAGE_DEP_DEPRECATION_TRIAL]: VERIFY_ACCURACY_ORIGIN_TRIAL_FIELDS,
+  [STAGE_DEP_SHIPPING]: VERIFY_ACCURACY_PREPARE_TO_SHIP_FIELDS,
+
+  [STAGE_ENT_SHIPPED]: VERIFY_ACCURACY_PREPARE_TO_SHIP_FIELDS,
 };
 
 // key: Origin trial stage types,

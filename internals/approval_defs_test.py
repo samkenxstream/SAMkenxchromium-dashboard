@@ -14,17 +14,11 @@
 
 import base64
 import datetime
-import requests
 import testing_config  # Must be imported before the module under test.
-import unittest
-import urllib.request, urllib.parse, urllib.error
 
 from unittest import mock
-import flask
-import werkzeug
 
 from internals import approval_defs
-from internals.legacy_models import Approval
 from internals.review_models import Gate, Vote
 
 
@@ -119,24 +113,24 @@ class IsApprovedTest(testing_config.CustomTestCase):
 
   def setUp(self):
     feature_1_id = 123456
-    self.appr_nr = Approval(
-        feature_id=feature_1_id, field_id=1,
-        state=Approval.REVIEW_REQUESTED,
+    self.appr_nr = Vote(
+        feature_id=feature_1_id, gate_type=1,
+        state=Vote.REVIEW_REQUESTED,
         set_on=datetime.datetime.now(),
         set_by='one@example.com')
-    self.appr_na = Approval(
-        feature_id=feature_1_id, field_id=1,
-        state=Approval.NA,
+    self.appr_na = Vote(
+        feature_id=feature_1_id, gate_type=1,
+        state=Vote.NA,
         set_on=datetime.datetime.now(),
         set_by='one@example.com')
-    self.appr_no = Approval(
-        feature_id=feature_1_id, field_id=1,
-        state=Approval.DENIED,
+    self.appr_no = Vote(
+        feature_id=feature_1_id, gate_type=1,
+        state=Vote.DENIED,
         set_on=datetime.datetime.now(),
         set_by='two@example.com')
-    self.appr_yes = Approval(
-        feature_id=feature_1_id, field_id=1,
-        state=Approval.APPROVED,
+    self.appr_yes = Vote(
+        feature_id=feature_1_id, gate_type=1,
+        state=Vote.APPROVED,
         set_on=datetime.datetime.now(),
         set_by='three@example.com')
 
@@ -216,6 +210,7 @@ DN = Vote.DENIED
 NW = Vote.NEEDS_WORK
 RS = Vote.REVIEW_STARTED
 NA = Vote.NA
+IR = Vote.INTERNAL_REVIEW
 GATE_VALUES= Vote.VOTE_VALUES.copy()
 GATE_VALUES.update({Gate.PREPARING: 'preparing'})
 
@@ -259,6 +254,15 @@ class CalcGateStateTest(testing_config.CustomTestCase):
     self.assertEqual(('needs_work', 'needs_work'),
                      self.do_calc(RR, NW, NW))
 
+  def test_request_internal_review(self):
+    """Owner requested a review and a reviewer opts for internal review."""
+    self.assertEqual(('internal_review', 'internal_review'),
+                     self.do_calc(RR, IR))
+    self.assertEqual(('internal_review', 'internal_review'),
+                     self.do_calc(RR, RS, IR))
+    self.assertEqual(('internal_review', 'internal_review'),
+                     self.do_calc(RR, NW, IR))
+
   def test_request_disagreement(self):
     """Reviewers may have different opinions, needed LGTMs counted."""
     self.assertEqual(('approved', 'needs_work'),
@@ -300,7 +304,8 @@ class CalcGateStateTest(testing_config.CustomTestCase):
 class UpdateTest(testing_config.CustomTestCase):
 
   def setUp(self):
-    self.gate_1 = Gate(feature_id=1, stage_id=1, gate_type=2, state=Vote.APPROVED)
+    self.gate_1 = Gate(
+        id=1001, feature_id=1, stage_id=1, gate_type=2, state=Gate.PREPARING)
     self.gate_1.put()
     gate_id = self.gate_1.key.integer_id()
     self.votes = []
@@ -320,8 +325,8 @@ class UpdateTest(testing_config.CustomTestCase):
         state=Vote.REVIEW_REQUESTED, set_on=datetime.datetime(2020, 1, 2),
         set_by='user5@example.com'))
 
-    self.gate_2 = Gate(feature_id=2, stage_id=2, gate_type=2,
-        state=Vote.APPROVED)
+    self.gate_2 = Gate(
+        id=1002, feature_id=2, stage_id=2, gate_type=2, state=Vote.APPROVED)
     self.gate_2.put()
     gate_id = self.gate_2.key.integer_id()
     self.votes.append(Vote(feature_id=1, gate_id=gate_id,
@@ -363,14 +368,22 @@ class UpdateTest(testing_config.CustomTestCase):
 
   def test_update_approval_stage__needs_update(self):
     """Gate's approval state will be updated based on votes."""
-    # Gate 1 should evaluate to not approved after updating.
-    self.assertEqual(
-        approval_defs.update_gate_approval_state(self.gate_1), Vote.APPROVED)
+    # Gate 1 should evaluate to approved after updating.
+    self.assertTrue(
+        approval_defs.update_gate_approval_state(self.gate_1))
     self.assertEqual(self.gate_1.state, Vote.APPROVED)
 
   def test_update_approval_state__no_change(self):
     """Gate's approval state does not change unless it needs to."""
     # Gate 2 is already marked as approved and should not change.
-    self.assertEqual(
-        approval_defs.update_gate_approval_state(self.gate_2), Vote.APPROVED)
+    self.assertFalse(
+        approval_defs.update_gate_approval_state(self.gate_2))
     self.assertEqual(self.gate_2.state, Vote.APPROVED)
+
+  def test_update_approval_state__unsupported_gate_type(self):
+    """If we don't recognize the gate type, assume rule ONE_LGTM."""
+    self.gate_1.gate_type = 999
+    # Gate 1 should evaluate to approved after updating.
+    self.assertTrue(
+        approval_defs.update_gate_approval_state(self.gate_1))
+    self.assertEqual(self.gate_1.state, Vote.APPROVED)

@@ -21,7 +21,6 @@ import werkzeug.exceptions  # Flask HTTP stuff.
 from api import features_api
 from internals import core_enums
 from internals.core_models import FeatureEntry, MilestoneSet, Stage
-from internals.legacy_models import Feature
 from internals import user_models
 from framework import rediscache
 
@@ -43,6 +42,9 @@ class FeaturesAPITestDelete(testing_config.CustomTestCase):
     self.app_admin = user_models.AppUser(email='admin@example.com')
     self.app_admin.is_admin = True
     self.app_admin.put()
+
+    self.random_user = user_models.AppUser(email='someuser@example.com')
+    self.random_user.put()
 
   def tearDown(self):
     cache_key = '%s|%s' % (
@@ -97,53 +99,39 @@ class FeaturesAPITestDelete(testing_config.CustomTestCase):
     self.assertFalse(revised_feature.deleted)
 
 
-class FeaturesAPITestGet_NewSchema(testing_config.CustomTestCase):
+class FeaturesAPITest(testing_config.CustomTestCase):
 
   def setUp(self):
     self.feature_1 = FeatureEntry(
-        name='feature one', summary='sum Z',
+        name='feature one', summary='sum Z', feature_type=0,
         owner_emails=['feature_owner@example.com'], category=1,
         intent_stage=core_enums.INTENT_IMPLEMENT)
     self.feature_1.put()
     self.feature_1_id = self.feature_1.key.integer_id()
+    self.ship_stage_1 = Stage(feature_id=self.feature_1_id,
+        stage_type=160, milestones=MilestoneSet(desktop_first=1))
+    self.ship_stage_1.put()
 
     self.feature_2 = FeatureEntry(
-        name='feature two', summary='sum K',
+        name='feature two', summary='sum K', feature_type=1,
         owner_emails=['other_owner@example.com'], category=1,
         intent_stage=core_enums.INTENT_IMPLEMENT)
     self.feature_2.put()
     self.feature_2_id = self.feature_2.key.integer_id()
+    self.ship_stage_2 = Stage(feature_id=self.feature_2_id,
+        stage_type=260, milestones=MilestoneSet(desktop_first=2))
+    self.ship_stage_2.put()
 
     self.feature_3 = FeatureEntry(
-        name='feature three', summary='sum A',
+        name='feature three', summary='sum A', feature_type=2,
         owner_emails=['other_owner@example.com'], category=1,
         intent_stage=core_enums.INTENT_IMPLEMENT,
         unlisted=True)
     self.feature_3.put()
     self.feature_3_id = self.feature_3.key.integer_id()
-
-    # Feature entities for testing legacy functions.
-    self.legacy_feature_1 = Feature(
-        name='feature one', summary='sum Z',
-        owner=['feature_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT)
-    self.legacy_feature_1.put()
-    self.legacy_feature_1_id = self.feature_1.key.integer_id()
-
-    self.legacy_feature_2 = Feature(
-        name='feature two', summary='sum K',
-        owner=['other_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT)
-    self.legacy_feature_2.put()
-    self.legacy_feature_2_id = self.feature_2.key.integer_id()
-
-    self.legacy_feature_3 = Feature(
-        name='feature three', summary='sum A',
-        owner=['other_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT,
-        unlisted=True)
-    self.legacy_feature_3.put()
-    self.legacy_feature_3_id = self.feature_3.key.integer_id()
+    self.ship_stage_3 = Stage(feature_id=self.feature_3_id,
+        stage_type=360, milestones=MilestoneSet(desktop_first=2))
+    self.ship_stage_3.put()
 
     self.request_path = '/api/v0/features'
     self.handler = features_api.FeaturesAPI()
@@ -153,7 +141,7 @@ class FeaturesAPITestGet_NewSchema(testing_config.CustomTestCase):
     self.app_admin.put()
 
   def tearDown(self):
-    for kind in [Feature, FeatureEntry, user_models.AppUser]:
+    for kind in [FeatureEntry, Stage, user_models.AppUser]:
       for entity in kind.query():
         entity.key.delete()
 
@@ -220,25 +208,25 @@ class FeaturesAPITestGet_NewSchema(testing_config.CustomTestCase):
     url = self.request_path + '?start=bad'
     with test_app.test_request_context(url):
       with self.assertRaises(werkzeug.exceptions.BadRequest):
-        actual = self.handler.do_get()
+        self.handler.do_get()
 
     # Malformed num parameter
     url = self.request_path + '?num=bad'
     with test_app.test_request_context(url):
       with self.assertRaises(werkzeug.exceptions.BadRequest):
-        actual = self.handler.do_get()
+        self.handler.do_get()
 
     # User wants a negative number of results
     url = self.request_path + '?num=-1'
     with test_app.test_request_context(url):
       with self.assertRaises(werkzeug.exceptions.BadRequest):
-        actual = self.handler.do_get()
+        self.handler.do_get()
 
     # User wants a negative offset
     url = self.request_path + '?start=-1'
     with test_app.test_request_context(url):
       with self.assertRaises(werkzeug.exceptions.BadRequest):
-        actual = self.handler.do_get()
+        self.handler.do_get()
 
   def test_get__all_unlisted_no_perms(self):
     """JSON feed does not include unlisted features for users who can't edit."""
@@ -316,79 +304,6 @@ class FeaturesAPITestGet_NewSchema(testing_config.CustomTestCase):
     self.assertEqual('sum K', actual['features'][1]['summary'])
     self.assertEqual('sum A', actual['features'][2]['summary'])
 
-
-# TODO(jrobbins): Merge with class above when everything uses FeatureEntries.
-class FeaturesAPITestGet_OldSchema(testing_config.CustomTestCase):
-
-  def setUp(self):
-    self.feature_1 = FeatureEntry(
-        name='feature one', summary='sum Z',
-        owner_emails=['feature_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT, feature_type=0)
-    self.feature_1.put()
-    self.feature_1_id = self.feature_1.key.integer_id()
-    self.ship_stage_1 = Stage(feature_id=self.feature_1_id,
-        stage_type=160, milestones=MilestoneSet(desktop_first=1))
-    self.ship_stage_1.put()
-    self.feature_2 = FeatureEntry(
-        name='feature two', summary='sum K',
-        owner_emails=['other_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT, feature_type=1)
-    self.feature_2.put()
-    self.feature_2_id = self.feature_2.key.integer_id()
-    self.ship_stage_2 = Stage(feature_id=self.feature_1_id,
-        stage_type=260, milestones=MilestoneSet(desktop_first=2))
-
-    self.feature_3 = FeatureEntry(
-        name='feature three', summary='sum A',
-        owner_emails=['other_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT, feature_type=2,
-        unlisted=True)
-    self.feature_3.put()
-    self.feature_3_id = self.feature_3.key.integer_id()
-    self.ship_stage_3 = Stage(feature_id=self.feature_1_id,
-        stage_type=360, milestones=MilestoneSet(desktop_first=2))
-
-    # Feature entities for testing legacy functions.
-    self.legacy_feature_1 = Feature(
-        name='feature one', summary='sum Z',
-        owner=['feature_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT,
-        shipped_milestone=1)
-    self.legacy_feature_1.put()
-    self.legacy_feature_1_id = self.feature_1.key.integer_id()
-
-    self.legacy_feature_2 = Feature(
-        name='feature two', summary='sum K',
-        owner=['other_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT,
-        shipped_milestone=2)
-    self.legacy_feature_2.put()
-    self.legacy_feature_2_id = self.feature_2.key.integer_id()
-
-    self.legacy_feature_3 = Feature(
-        name='feature three', summary='sum A',
-        owner=['other_owner@example.com'], category=1,
-        intent_stage=core_enums.INTENT_IMPLEMENT,
-        shipped_milestone=2, unlisted=True)
-    self.legacy_feature_3.put()
-    self.legacy_feature_3_id = self.feature_3.key.integer_id()
-
-    self.request_path = '/api/v0/features'
-    self.handler = features_api.FeaturesAPI()
-
-    self.app_admin = user_models.AppUser(email='admin@example.com')
-    self.app_admin.is_admin = True
-    self.app_admin.put()
-
-  def tearDown(self):
-    for kind in [Feature, FeatureEntry, Stage, user_models.AppUser]:
-      for entity in kind.query():
-        entity.key.delete()
-    testing_config.sign_out()
-    rediscache.delete_keys_with_prefix('features|*')
-    rediscache.delete_keys_with_prefix('FeatureEntries|*')
-
   def test_get__in_milestone_listed(self):
     """Get all features in a specific milestone that are listed."""
     # Atleast one feature is present in milestone
@@ -447,18 +362,16 @@ class FeaturesAPITestGet_OldSchema(testing_config.CustomTestCase):
     self.assertEqual(0, actual['total_count'])
     self.assertEqual(0, len(actual['features_by_type']['Enabled by default']))
 
-  @mock.patch('flask.abort')
-  def test_get__in_milestone_invalid_query(self, mock_abort):
+  def test_get__in_milestone_invalid_query(self):
     """Invalid value of milestone should not be processed."""
-    mock_abort.side_effect = werkzeug.exceptions.BadRequest
-
-    # Feature is present in milestone
     with test_app.test_request_context(
         self.request_path+'?milestone=chromium'):
-      with self.assertRaises(werkzeug.exceptions.BadRequest):
-        actual = self.handler.do_get()
-        mock_abort.assert_called_once_with(
-            400, msg="Request parameter 'milestone' was not an int")
+      with self.assertRaises(werkzeug.exceptions.BadRequest) as cm:
+        self.handler.do_get()
+      self.assertEqual(400, cm.exception.code)
+      self.assertEqual(
+          "Request parameter 'milestone' was not an int",
+          cm.exception.description)
 
   def test_get__specific_id__found(self):
     """JSON feed has just the feature requested."""
@@ -473,3 +386,67 @@ class FeaturesAPITestGet_OldSchema(testing_config.CustomTestCase):
     with test_app.test_request_context(request_path):
       with self.assertRaises(werkzeug.exceptions.NotFound):
         self.handler.do_get(feature_id=999)
+  
+  def test_patch__valid(self):
+    """PATCH request successful with valid input from user with permissions."""
+    # Signed-in user with permissions
+    testing_config.sign_in('admin@example.com', 123567890)
+
+    new_summary = 'a different summary'
+    new_owner_emails = ['test@example.com']
+    valid_request_body = {
+      'update_fields': ['summary', 'owner_emails'],
+      'summary': new_summary,
+      'owner_emails': new_owner_emails,
+    }
+    request_path = f'{self.request_path}/{self.feature_1_id}'
+    with test_app.test_request_context(request_path, json=valid_request_body):
+      response = self.handler.do_patch(feature_id=self.feature_1_id)
+    # Success response should be returned
+    self.assertEqual({'message': f'Feature {self.feature_1_id} updated.'}, response)
+    # Assert that changes were made.
+    self.assertEqual(self.feature_1.summary, new_summary)
+    self.assertEqual(self.feature_1.owner_emails, new_owner_emails)
+    # Updater email field should be changed
+    self.assertEqual(self.feature_1.updater_email, 'admin@example.com')
+
+  def test_patch__no_permissions(self):
+    """We give 403 if the user does not have feature edit access."""
+    testing_config.sign_in('someuser@example.com', 123567890)
+
+    request_path = f'{self.request_path}/{self.feature_1_id}'
+    with test_app.test_request_context(request_path, json={}):
+      with self.assertRaises(werkzeug.exceptions.Forbidden):
+        self.handler.do_patch(feature_id=self.feature_1_id)
+
+  def test_patch__invalid_fields(self):
+    """PATCH request fails with 400 when supplying invalid fields."""
+    # Signed-in user with permissions
+    testing_config.sign_in('admin@example.com', 123567890)
+
+    bad_param = 'Not a real field'
+    new_owner_emails = ['test@example.com']
+    invalid_request_body = {
+      'update_fields': ['bad_param', 'owner_emails'],
+      'bad_param': bad_param,
+      'owner_emails': new_owner_emails,
+    }
+    request_path = f'{self.request_path}/{self.feature_1_id}'
+    with test_app.test_request_context(request_path, json=invalid_request_body):
+      with self.assertRaises(werkzeug.exceptions.BadRequest):
+        self.handler.do_patch(feature_id=self.feature_1_id)
+  
+  def test_patch__immutable_fields(self):
+    """PATCH request fails with 400 when immutable field change is attempted."""
+    # Signed-in user with permissions
+    testing_config.sign_in('admin@example.com', 123567890)
+
+    new_creator = 'differentuser@example.com'
+    invalid_request_body = {
+      'update_fields': ['creator_email'],
+      'creator_email': new_creator,
+    }
+    request_path = f'{self.request_path}/{self.feature_1_id}'
+    with test_app.test_request_context(request_path, json=invalid_request_body):
+      with self.assertRaises(werkzeug.exceptions.BadRequest):
+        self.handler.do_patch(feature_id=self.feature_1_id)

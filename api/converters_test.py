@@ -64,7 +64,7 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
     self.fe_1.put()
 
     # Write stages for the feature.
-    stage_types = [110, 120, 130, 140, 150, 151, 160]
+    stage_types = [110, 120, 130, 140, 150, 151, 160, 1061]
     for s_type in stage_types:
       s = Stage(feature_id=self.fe_1.key.integer_id(), stage_type=s_type,
           milestones=MilestoneSet(desktop_first=1,
@@ -171,6 +171,89 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
     }
     self.assertEqual(result, expected)
 
+  def test_feature_entry_to_json_basic__feature_release(self):
+    """Converts released feature entry to basic JSON dictionary."""
+    stages = [Stage(feature_id=self.fe_1.key.integer_id(), stage_type=160,
+          milestones=MilestoneSet(desktop_first=1,android_first=1, desktop_last=2))]
+    result = converters.feature_entry_to_json_basic(self.fe_1, stages)
+    expected_date = str(self.date)
+    expected = {
+      'id': 123,
+      'name': 'feature template',
+      'summary': 'sum',
+      'unlisted': False,
+      'blink_components': ['Blink'],
+      'breaking_change': False,
+      'is_released': True,
+      'milestone': True,
+      'resources': {
+        'samples': ['https://example.com/samples'],
+        'docs': ['https://example.com/docs'],
+      },
+      'created': {
+        'by': 'creator@example.com',
+        'when': expected_date
+      },
+      'updated': {
+        'by': 'updater@example.com',
+        'when': expected_date
+      },
+      'standards': {
+        'spec': 'https://example.com/spec',
+        'maturity': {
+          'text': 'Unknown standards status - check spec link for status',
+          'short_text': 'Unknown status',
+          'val': 1,
+        },
+      },
+      'browsers': {
+        'chrome': {
+          'bug': 'https://example.com/bug',
+          'blink_components': ['Blink'],
+          'devrel':['devrel@example.com'],
+          'owners':['feature_owner@example.com'],
+          'origintrial': False,
+          'intervention': False,
+          'prefixed': False,
+          'flag': False,
+          'status': {
+            'text':'Enabled by default',
+            'val': 5
+          }
+        },
+        'ff': {
+          'view': {
+          'text': 'No signal',
+          'val': 5,
+          'url': 'https://example.com/ff_views',
+          'notes': 'ff notes',
+          }
+        },
+        'safari': {
+          'view': {
+          'text': 'Shipped/Shipping',
+          'val': 1,
+          'url': 'https://example.com/safari_views',
+          'notes': 'safari notes',
+          }
+        },
+        'webdev': {
+          'view': {
+          'text': 'Strongly positive',
+          'val': 1,
+          'url': 'https://example.com/web_dev',
+          'notes': None,
+          }
+        },
+        'other': {
+          'view': {
+            'notes': 'other notes',
+          },
+        },
+      },
+    }
+    self.assertEqual(result, expected)
+
   def test_feature_entry_to_json_basic__bad_view_field(self):
     """Function handles if any views fields have deprecated values."""
     # Deprecated views enum value.
@@ -180,6 +263,14 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
     result = converters.feature_entry_to_json_basic(self.fe_1)
     self.assertEqual(5, result['browsers']['safari']['view']['val'])
     self.assertEqual(5, result['browsers']['ff']['view']['val'])
+
+  def test_feature_entry_to_json_basic__empty_feature(self):
+    """Function handles if FeatureEntry key is None."""
+    empty_fe = FeatureEntry()
+
+    result = converters.feature_entry_to_json_basic(empty_fe)
+
+    self.assertEqual(result, {})
 
   def test_feature_entry_to_json_verbose__normal(self):
     """Converts feature entry to complete JSON with stage data."""
@@ -194,27 +285,6 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
       'unlisted': False,
       'api_spec': False,
       'breaking_change': False,
-
-      # Intent fields
-      'intent_to_implement_url': 'https://example.com/120',
-      'intent_to_experiment_url': 'https://example.com/150',
-      'intent_to_extend_experiment_url': 'https://example.com/151',
-      'intent_to_ship_url': 'https://example.com/160',
-
-      # Milestone fields
-      'dt_milestone_desktop_start': 1,
-      'dt_milestone_android_start': 1,
-      'ot_milestone_desktop_start': 1,
-      'ot_milestone_android_start': 1,
-      'ot_milestone_desktop_end': 2,
-
-      # Stage-specific fields
-      'experiment_goals': 'goals',
-      'experiment_risks': 'risks',
-      'experiment_extension_reason': 'reason',
-      'announcement_url': 'https://example.com/announce',
-      'finch_url': 'https://example.com/finch',
-
       'is_released': True,
       'category': 'Web Components',
       'category_int': 1,
@@ -254,6 +324,53 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
           'val': 1,
         },
       },
+
+      'activation_risks': None,
+      'active_stage_id': None,
+      'adoption_expectation': None,
+      'adoption_plan': None,
+      'all_platforms': None,
+      'all_platforms_descr': None,
+      'anticipated_spec_changes': None,
+      'availability_expectation': None,
+      'blink_components': ['Blink'],
+
+      'cc_emails': [],
+      'cc_recipients': [],
+      'creator_email': 'creator@example.com',
+      'debuggability': None,
+      'devtrial_instructions': None,
+      'editor_emails': ['feature_editor@example.com', 'owner_1@example.com'],
+      'enterprise_feature_categories': [],
+      'ergonomics_risks': None,
+      'experiment_timeline': None,
+      'explainer_links': [],
+      'feature_notes': 'notes',
+      'ff_views': 5,
+      'flag_name': None,
+      'initial_public_proposal_url': None,
+      'interop_compat_risks': None,
+      'measurement': None,
+      'motivation': None,
+      'new_crbug_url': None,
+      'non_oss_deps': None,
+      'ongoing_constraints': None,
+      'owner_emails': ['feature_owner@example.com'],
+      'owner_emails': ['feature_owner@example.com'],
+      'safari_views': 1,
+      'search_tags': [],
+      'security_risks': None,
+      'spec_mentor_emails': [],
+      'spec_mentors': [],
+      'tag_review': None,
+      'tags': [],
+      'updated_display': None,
+      'updater_email': 'updater@example.com',
+      'web_dev_views': 1,
+      'webview_risks': None,
+      'wpt': None,
+      'wpt_descr': None,
+
       'tag_review_status': 'Pending',
       'tag_review_status_int': 1,
       'security_review_status': 'Issues open',
@@ -271,12 +388,15 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
           'owners':['feature_owner@example.com'],
           'desktop': 1,
           'android': 1,
+          'ios': None,
+
           'origintrial': False,
           'intervention': False,
           'prefixed': False,
           'flag': False,
+          'webview': None,
           'status': {
-            'milestone_str': 1,
+            'milestone_str': '1',
             'text': 'Enabled by default',
             'val': 5
           }
@@ -299,6 +419,7 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
         },
         'webdev': {
           'view': {
+          'notes': None,
           'text': 'Strongly positive',
           'val': 1,
           'url': 'https://example.com/web_dev',
@@ -306,10 +427,13 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
         },
         'other': {
           'view': {
-            'notes': 'other notes',
-          }
-        }
-      }
+            'notes': 'other notes',                                      
+            'text': None,
+            'url': None,
+            'val': None,
+          },
+        },
+      },
     }
     self.assertEqual(result, expected)
 
@@ -332,6 +456,14 @@ class FeatureConvertersTest(testing_config.CustomTestCase):
     result = converters.feature_entry_to_json_verbose(self.fe_1)
     self.assertTrue(result['is_enterprise_feature'])
     self.assertEqual(['1', '2'], result['enterprise_feature_categories'])
+
+  def test_feature_entry_to_json_verbose__empty_feature(self):
+    """Function handles an empty feature."""
+    empty_fe = FeatureEntry()
+
+    with self.assertRaises(Exception):
+      converters.feature_entry_to_json_verbose(empty_fe)
+
 
 class VoteConvertersTest(testing_config.CustomTestCase):
 

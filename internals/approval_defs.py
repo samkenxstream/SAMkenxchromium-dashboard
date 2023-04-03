@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import base64
-import collections
 from dataclasses import dataclass
 import datetime
 import logging
@@ -23,7 +22,6 @@ import requests
 
 from framework import permissions
 from internals import core_enums
-from internals.legacy_models import Approval
 from internals.review_models import Gate, OwnersFile, Vote
 import settings
 
@@ -219,9 +217,9 @@ def is_approved(approval_values, field_id):
   """Return true if we have all needed APPROVED values and no DENIED."""
   count = 0
   for av in approval_values:
-    if av.state in (Approval.APPROVED, Approval.NA):
+    if av.state in (Vote.APPROVED, Vote.NA):
       count += 1
-    elif av.state == Approval.DENIED:
+    elif av.state == Vote.DENIED:
       return False
   afd = APPROVAL_FIELDS_BY_ID[field_id]
 
@@ -241,7 +239,7 @@ def is_resolved(approval_values, field_id):
 
   # Any DENIED value means that the review is no longer pending.
   for av in approval_values:
-    if av.state == Approval.DENIED:
+    if av.state == Vote.DENIED:
       return True
 
   return False
@@ -268,7 +266,7 @@ def set_vote(feature_id: int,  gate_type: int | None, new_state: int,
 
   now = datetime.datetime.now()
   existing_list: list[Vote] = Vote.get_votes(feature_id=feature_id,
-      gate_id=gate_id, gate_type=gate_type, set_by=set_by_email)
+      gate_id=gate_id, set_by=set_by_email)
   if existing_list:
     existing = existing_list[0]
     existing.set_on = now
@@ -279,8 +277,8 @@ def set_vote(feature_id: int,  gate_type: int | None, new_state: int,
         gate_type=gate_type, state=new_state, set_on=now, set_by=set_by_email)
     new_vote.put()
 
-  if gate:
-    update_gate_approval_state(gate)
+  if gate and update_gate_approval_state(gate):
+    gate.put()
 
 
 def get_gate_by_type(feature_id: int, gate_type: int):
@@ -308,14 +306,14 @@ def _calc_gate_state(votes: list[Vote], rule: str) -> int:
       return Vote.APPROVED
 
   # Return the most recent of any REVIEW_REQUESTED, NEEDS_WORK,
-  # REVIEW_STARTED, or DENIED.  This could allow a feature owner to
-  # re-request a review after addressing feedback and have the gate
-  # show up as REVIEW_STARTED again.  However, we will not offer
-  # "re-review" in the UI yet.
+  # REVIEW_STARTED, INTERNAL_REVIEW, or DENIED.  This could allow a
+  # feature owner to re-request a review after addressing feedback and
+  # have the gate show up as REVIEW_STARTED again.  However, we will
+  # not offer "re-review" in the UI yet.
   for vote in sorted(votes, reverse=True, key=lambda v: v.set_on):
     if vote.state in (
         Vote.NEEDS_WORK, Vote.REVIEW_STARTED, Vote.REVIEW_REQUESTED,
-        Vote.DENIED):
+        Vote.DENIED, Vote.INTERNAL_REVIEW):
       return vote.state
 
   # The feature owner has not requested review yet, or the request was
@@ -324,11 +322,15 @@ def _calc_gate_state(votes: list[Vote], rule: str) -> int:
 
 
 def update_gate_approval_state(gate: Gate) -> int:
-  """Change the Gate state based on its votes."""
+  """Change the Gate state in RAM based on its votes. Return True if changed."""
   votes = Vote.get_votes(gate_id=gate.key.integer_id())
-  afd = APPROVAL_FIELDS_BY_ID[gate.gate_type]
-  gate.state = _calc_gate_state(votes, afd.rule)
+  afd = APPROVAL_FIELDS_BY_ID.get(gate.gate_type)
+  # Assume any gate of a type that is not currently supported is ONE_LGTM.
+  rule = afd.rule if afd else ONE_LGTM
+  new_state = _calc_gate_state(votes, rule)
+  if new_state == gate.state:
+    return False
+  gate.state = new_state
   if votes:
     gate.requested_on = min(v.set_on for v in votes)
-  gate.put()
-  return gate.state
+  return True

@@ -55,6 +55,16 @@ ENTERPRISE_FEATURE_SECURITYANDPRIVACY = 1
 ENTERPRISE_FEATURE_USERPRODUCTIVITYANDAPPS = 2
 ENTERPRISE_FEATURE_MANAGEMENT = 3
 
+IMPACT_LOW = 1
+IMPACT_MEDIUM = 2
+IMPACT_HIGH = 3
+
+IMPACT_CATEGORIES = collections.OrderedDict([
+  (IMPACT_LOW, 'Low'),
+  (IMPACT_MEDIUM, 'Medium'),
+  (IMPACT_HIGH, 'High'),
+])
+
 PLATFORM_CATEGORIES = collections.OrderedDict([
   (PLATFORM_ANDROID, 'Android'),
   (PLATFORM_IOS, 'iOS'),
@@ -274,7 +284,8 @@ STAGES_AND_GATES_BY_FEATURE_TYPE: dict[int, list[tuple[int, list[int]]]] = {
         (STAGE_BLINK_EXTEND_ORIGIN_TRIAL, [GATE_API_EXTEND_ORIGIN_TRIAL]),
         (STAGE_BLINK_SHIPPING,
          [
-          GATE_PRIVACY_SHIP, GATE_SECURITY_SHIP, GATE_ENTERPRISE_SHIP,
+          # GATE_PRIVACY_SHIP, GATE_SECURITY_SHIP,
+          GATE_ENTERPRISE_SHIP,
           GATE_DEBUGGABILITY_SHIP, GATE_TESTING_SHIP,
           GATE_API_SHIP])],
     FEATURE_TYPE_EXISTING_ID: [
@@ -286,7 +297,8 @@ STAGES_AND_GATES_BY_FEATURE_TYPE: dict[int, list[tuple[int, list[int]]]] = {
         (STAGE_FAST_EXTEND_ORIGIN_TRIAL, [GATE_API_EXTEND_ORIGIN_TRIAL]),
         (STAGE_FAST_SHIPPING,
          [
-          GATE_PRIVACY_SHIP, GATE_SECURITY_SHIP, GATE_ENTERPRISE_SHIP,
+          # GATE_PRIVACY_SHIP, GATE_SECURITY_SHIP,
+          GATE_ENTERPRISE_SHIP,
           GATE_DEBUGGABILITY_SHIP, GATE_TESTING_SHIP,
           GATE_API_SHIP])],
     FEATURE_TYPE_CODE_CHANGE_ID: [
@@ -302,7 +314,8 @@ STAGES_AND_GATES_BY_FEATURE_TYPE: dict[int, list[tuple[int, list[int]]]] = {
         (STAGE_DEP_EXTEND_DEPRECATION_TRIAL, [GATE_API_EXTEND_ORIGIN_TRIAL]),
         (STAGE_DEP_SHIPPING,
          [
-          GATE_PRIVACY_SHIP, GATE_SECURITY_SHIP, GATE_ENTERPRISE_SHIP,
+          # GATE_PRIVACY_SHIP, GATE_SECURITY_SHIP,
+          GATE_ENTERPRISE_SHIP,
           GATE_DEBUGGABILITY_SHIP, GATE_TESTING_SHIP,
           GATE_API_SHIP]),
         (STAGE_DEP_REMOVE_CODE, [])],
@@ -395,6 +408,7 @@ STAGE_TYPES_BY_FIELD_MAPPING: dict[str, dict[int, Optional[int]]] = {
     'dt_milestone_ios_start': STAGE_TYPES_DEV_TRIAL,
     'dt_milestone_webview_start': STAGE_TYPES_DEV_TRIAL,
     'enterprise_policies': STAGE_TYPES_ROLLOUT,
+    'rollout_impact': STAGE_TYPES_ROLLOUT,
     'rollout_milestone': STAGE_TYPES_ROLLOUT,
     'rollout_platforms': STAGE_TYPES_ROLLOUT,
     'rollout_details': STAGE_TYPES_ROLLOUT
@@ -618,6 +632,7 @@ PROPERTY_NAMES_TO_ENUM_DICTS = {
     'browsers.safari.view': VENDOR_VIEWS,
     'web_dev_views': WEB_DEV_VIEWS,
     'browsers.webdev.view': WEB_DEV_VIEWS,
+    'rollout_impact': IMPACT_CATEGORIES,
     'rollout_platforms': PLATFORM_CATEGORIES,
   }
 

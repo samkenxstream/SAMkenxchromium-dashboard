@@ -62,6 +62,18 @@ export const PLATFORMS_DISPLAYNAME = {
   8: 'Fuchsia', // PLATFORM_FUCHSIA
 };
 
+export const ROLLOUT_IMPACT = {
+  IMPACT_LOW: [1, 'Low'],
+  IMPACT_MEDIUM: [2, 'Medium'],
+  IMPACT_HIGH: [3, 'High'],
+};
+
+export const ROLLOUT_IMPACT_DISPLAYNAME = {
+  1: 'Low', // IMPACT_LOW
+  2: 'Medium', // IMPACT_MEDIUM
+  3: 'High', // IMPACT_HIGH
+};
+
 // FEATURE_TYPES object is organized as [intValue, stringLabel, description],
 // the descriptions are used only for the descriptions of feature_type_radio_group
 export const FEATURE_TYPES_WITHOUT_ENTERPRISE = {
@@ -109,8 +121,6 @@ export const STAGE_SPECIFIC_FIELDS = new Set([
   'ot_milestone_desktop_end',
   'ot_milestone_android_start',
   'ot_milestone_android_end',
-  'ot_milestone_ios_start',
-  'ot_milestone_ios_end',
   'ot_milestone_webview_start',
   'ot_milestone_webview_end',
   'dt_milestone_desktop_start',
@@ -126,19 +136,50 @@ export const STAGE_SPECIFIC_FIELDS = new Set([
   'intent_to_ship_url',
   'intent_to_experiment_url',
   'intent_to_extend_experiment_url',
+  'intent_thread_url',
 
   // Misc fields.
+  'display_name',
   'origin_trial_feedback_url',
   'finch_url',
   'experiment_goals',
   'experiment_risks',
   'experiment_extension_reason',
+  'rollout_impact',
   'rollout_milestone',
   'rollout_platforms',
   'rollout_details',
   'enterprise_policies',
-  'ready_for_trial_url',
+  'announcement_url',
 ]);
+
+// Mapping of specific field names to their more generic stage names.
+export const STAGE_FIELD_NAME_MAPPING = {
+  // Milestone fields.
+  shipped_milestone: 'desktop_first',
+  shipped_android_milestone: 'android_first',
+  shipped_ios_milestone: 'ios_first',
+  shipped_webview_milestone: 'webview_first',
+  ot_milestone_desktop_start: 'desktop_first',
+  ot_milestone_desktop_end: 'desktop_last',
+  ot_milestone_android_start: 'android_first',
+  ot_milestone_android_end: 'android_last',
+  ot_milestone_webview_start: 'webview_first',
+  ot_milestone_webview_end: 'webview_last',
+  dt_milestone_desktop_start: 'desktop_first',
+  dt_milestone_android_start: 'android_first',
+  dt_milestone_ios_start: 'ios_first',
+  dt_milestone_webview_start: 'webview_first',
+  extension_desktop_last: 'desktop_last',
+  extension_android_last: 'android_last',
+  extension_webview_last: 'webview_last',
+
+  // Intent fields.
+  intent_to_implement_url: 'intent_thread_url',
+  intent_to_ship_url: 'intent_thread_url',
+  intent_to_experiment_url: 'intent_thread_url',
+  intent_to_extend_experiment_url: 'intent_thread_url',
+};
 
 export const DEPRECATED_FIELDS = new Set([
   'experiment_timeline',

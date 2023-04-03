@@ -29,10 +29,25 @@ import settings
 class FeatureEntry(ndb.Model):  # Copy from Feature
   """This is the main representation of a feature that we are tracking."""
 
+  # Fields that should not be mutated by user edit requests.
+  FIELDS_IMMUTABLE_BY_USER = frozenset([
+    'id',
+    'created',
+    'creator_email',
+    'updated',
+    'updater_email',
+    'accurate_as_of',
+    'outstanding_notifications',
+    'deleted',
+    'star_count',
+    'feature_type',
+  ])
+
   # Metadata: Creation and updates.
   created = ndb.DateTimeProperty(auto_now_add=True)
   updated = ndb.DateTimeProperty(auto_now_add=True)
   accurate_as_of = ndb.DateTimeProperty()
+  outstanding_notifications = ndb.IntegerProperty(default=0)
   creator_email = ndb.StringProperty()
   updater_email = ndb.StringProperty()
 
@@ -54,7 +69,7 @@ class FeatureEntry(ndb.Model):  # Copy from Feature
   feature_notes = ndb.TextProperty()  # copy from comments
 
   # Metadata: Process information
-  feature_type = ndb.IntegerProperty(default=FEATURE_TYPE_INCUBATE_ID)
+  feature_type = ndb.IntegerProperty(required=True, default=FEATURE_TYPE_INCUBATE_ID)
   intent_stage = ndb.IntegerProperty(default=INTENT_NONE)
   active_stage_id = ndb.IntegerProperty()
   bug_url = ndb.StringProperty()  # Tracking bug
@@ -170,8 +185,6 @@ class MilestoneSet(ndb.Model):  # copy from milestone fields of Feature
       'ot_milestone_desktop_end': 'desktop_last',
       'ot_milestone_android_start': 'android_first',
       'ot_milestone_android_end': 'android_last',
-      'ot_milestone_ios_start': 'ios_first',
-      'ot_milestone_ios_end': 'ios_last',
       'ot_milestone_webview_start': 'webview_first',
       'ot_milestone_webview_end': 'webview_last',
       'dt_milestone_desktop_start': 'desktop_first',
@@ -227,6 +240,7 @@ class Stage(ndb.Model):
   # Identifying information: what.
   feature_id = ndb.IntegerProperty(required=True)
   stage_type = ndb.IntegerProperty(required=True)
+  display_name = ndb.StringProperty()
 
   # Pragmatic information: where and when.
   browser = ndb.StringProperty()  # Blank or "Chrome" for now.
@@ -252,6 +266,7 @@ class Stage(ndb.Model):
   ot_stage_id = ndb.IntegerProperty()
 
   #Enterprise
+  rollout_impact = ndb.IntegerProperty(default=2) # default to "Medium impact"
   rollout_milestone = ndb.IntegerProperty()
   rollout_platforms = ndb.StringProperty(repeated=True)
   rollout_details = ndb.TextProperty()

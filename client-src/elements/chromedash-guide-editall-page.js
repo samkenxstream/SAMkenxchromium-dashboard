@@ -1,6 +1,11 @@
 import {LitElement, css, html, nothing} from 'lit';
 import {ref} from 'lit/directives/ref.js';
-import {showToastMessage, flattenSections, setupScrollToHash} from './utils.js';
+import {
+  getStageValue,
+  showToastMessage,
+  flattenSections,
+  setupScrollToHash,
+  shouldShowDisplayNameField} from './utils.js';
 import './chromedash-form-table';
 import './chromedash-form-field';
 import {
@@ -42,6 +47,7 @@ export class ChromedashGuideEditallPage extends LitElement {
     this.loading = true;
     this.appTitle = '';
     this.nextPage = '';
+    this.previousStageTypeRendered = 0;
     this.sameTypeRendered = 0;
   }
 
@@ -145,24 +151,31 @@ export class ChromedashGuideEditallPage extends LitElement {
     return FORMS_BY_STAGE_TYPE[stageType] || null;
   }
 
-  renderStageSection(formattedFeature, name, feStage, stageFields) {
+  renderStageSection(formattedFeature, sectionBaseName, feStage, stageFields) {
     if (!stageFields) return nothing;
 
     // Add a number differentiation if this stage type is the same as another stage.
     let numberDifferentiation = '';
     if (this.previousStageTypeRendered && this.previousStageTypeRendered === feStage.stage_type) {
       this.sameTypeRendered += 1;
-      numberDifferentiation = ` (${this.sameTypeRendered})`;
+      numberDifferentiation = ` ${this.sameTypeRendered}`;
     } else {
       this.previousStageTypeRendered = feStage.stage_type;
       this.sameTypeRendered = 1;
     }
-    const sectionName = `${name}${numberDifferentiation}`;
-
+    let sectionName = `${sectionBaseName}${numberDifferentiation}`;
+    if (feStage.display_name) {
+      sectionName = `${sectionBaseName}: ${feStage.display_name} `;
+    }
     const formFieldEls = stageFields.map(field => {
+      // Only show "display name" field if there is more than one stage of the same type.
+      if (field === 'display_name' &&
+          !shouldShowDisplayNameField(this.feature.stages, feStage.stage_type)) {
+        return nothing;
+      }
       let value = formattedFeature[field];
       if (STAGE_SPECIFIC_FIELDS.has(field)) {
-        value = feStage[field];
+        value = getStageValue(feStage, field);
       } else if (this.sameTypeRendered > 1) {
         // Don't render fields that are not stage-specific if this is
         // a stage type that is already being rendered.
@@ -173,7 +186,8 @@ export class ChromedashGuideEditallPage extends LitElement {
         <chromedash-form-field
           name=${field}
           stageId=${feStage.id}
-          value=${value}>
+          value=${value}
+          ?forEnterprise=${formattedFeature.is_enterprise_feature}>
         </chromedash-form-field>
       `;
     });
@@ -224,9 +238,13 @@ export class ChromedashGuideEditallPage extends LitElement {
       const extensions = feStage.extensions || [];
       extensions.forEach(extensionStage => {
         fieldsOnly = flattenSections(FLAT_TRIAL_EXTENSION_FIELDS);
+        let sectionName = FLAT_TRIAL_EXTENSION_FIELDS.name;
+        if (feStage.display_name) {
+          sectionName = ` ${FLAT_TRIAL_EXTENSION_FIELDS.name}: ${feStage.display_name} `;
+        }
         formsToRender.push(this.renderStageSection(
           formattedFeature,
-          `${FLAT_TRIAL_EXTENSION_FIELDS.name}`,
+          sectionName,
           extensionStage,
           fieldsOnly));
         allFormFields = [...allFormFields, ...fieldsOnly];

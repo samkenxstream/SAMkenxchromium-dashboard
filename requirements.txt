@@ -16,8 +16,8 @@ google-cloud-ndb==1.11.1
 google-cloud-logging==3.0.0
 google-auth==1.31.0
 requests==2.27.1
-redis==4.3.4
-fakeredis==1.9.0
+redis==4.4.4
+fakeredis==1.10.1
 Flask==2.1.2
 flask-cors==3.0.10
 funcsigs==1.0.2
@@ -30,3 +30,6 @@ itsdangerous==2.1.2
 # Work-around for failure to deploy
 # https://stackoverflow.com/questions/69936420/google-cloud-platform-app-deploy-failure-due-to-pyparsing
 pyparsing==2.4.7
+
+# OpenAPI files
+./gen/py/chromestatus_openapi

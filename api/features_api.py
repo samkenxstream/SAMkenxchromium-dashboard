@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
+from datetime import datetime
 
 from api import converters
 from framework import basehandlers
@@ -22,19 +22,21 @@ from framework import rediscache
 from framework import users
 from internals.core_enums import *
 from internals.core_models import FeatureEntry
+from internals.data_types import VerboseFeatureDict
 from internals import feature_helpers
 from internals import search
+
 
 class FeaturesAPI(basehandlers.APIHandler):
   """Features are the the main records that we track."""
 
-  def get_one_feature(self, feature_id: int) -> dict[str, Any]:
+  def get_one_feature(self, feature_id: int) -> VerboseFeatureDict:
     feature = FeatureEntry.get_by_id(feature_id)
     if not feature:
       self.abort(404, msg='Feature %r not found' % feature_id)
     return converters.feature_entry_to_json_verbose(feature)
 
-  def do_search(self) -> dict[str, Any]:
+  def do_search(self):
     user = users.get_current_user()
     # Show unlisted features to site editors or admins.
     show_unlisted_features = permissions.can_edit_any_feature(user)
@@ -69,8 +71,11 @@ class FeaturesAPI(basehandlers.APIHandler):
         'features': features_on_page,
         }
 
-  def do_get(self, **kwargs) -> dict[str, Any]:
+  def do_get(self, **kwargs):
     """Handle GET requests for a single feature or a search."""
+    # TODO(danielrsmith): This request gives two independent return types
+    # based on whether a feature_id was specified. Determine the best
+    # way to handle this in a strictly-typed manner and implement it.
     feature_id = kwargs.get('feature_id', None)
     if feature_id:
       return self.get_one_feature(feature_id)
@@ -78,7 +83,36 @@ class FeaturesAPI(basehandlers.APIHandler):
 
   # TODO(jrobbins): do_post
 
-  # TODO(jrobbins): do_patch
+  def do_patch(self, **kwargs):
+    """Handle PATCH requests to update fields in a single feature."""
+    feature_id = kwargs['feature_id']
+    body = self.get_json_param_dict()
+
+    # update_fields represents which fields will be updated by this request.
+    fields_to_update = body.get('update_fields', [])
+    feature: FeatureEntry | None = FeatureEntry.get_by_id(feature_id)
+    if feature is None:
+      self.abort(404, msg=f'Feature {feature_id} not found')
+
+    # Validate the user has edit permissions and redirect if needed.
+    redirect_resp = permissions.validate_feature_edit_permission(
+        self, feature_id)
+    if redirect_resp:
+      return redirect_resp
+
+    # Update each field specified in the field mask.
+    for field in fields_to_update:
+      # Each field specified should be a valid field that exists on the entity.
+      if not hasattr(feature, field):
+        self.abort(400, msg=f'FeatureEntry has no attribute {field}.')
+      if field in FeatureEntry.FIELDS_IMMUTABLE_BY_USER:
+        self.abort(400, f'FeatureEntry field {field} is immutable.')
+      setattr(feature, field, body.get(field, None))
+
+    feature.updater_email = self.get_current_user().email()
+    feature.updated = datetime.now()
+    feature.put()
+    return {'message': f'Feature {feature_id} updated.'}
 
   @permissions.require_admin_site
   def do_delete(self, **kwargs) -> dict[str, str]:
@@ -93,7 +127,7 @@ class FeaturesAPI(basehandlers.APIHandler):
     rediscache.delete_keys_with_prefix(FeatureEntry.feature_cache_prefix())
 
     # Write for new FeatureEntry entity.
-    feature_entry: Optional[FeatureEntry] = (
+    feature_entry: FeatureEntry | None = (
         FeatureEntry.get_by_id(feature_id))
     if feature_entry:
       feature_entry.deleted = True

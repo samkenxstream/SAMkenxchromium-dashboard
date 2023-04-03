@@ -16,9 +16,10 @@
 from dataclasses import dataclass, field
 from typing import Any, Type
 
-from api import accounts_api, dev_api
-from api import approvals_api
+from api import accounts_api
 from api import blink_components_api
+from api import component_users
+from api import components_users
 from api import channels_api
 from api import comments_api
 from api import cues_api
@@ -98,13 +99,6 @@ API_BASE = '/api/v0'
 api_routes: list[Route] = [
     Route(f'{API_BASE}/features', features_api.FeaturesAPI),
     Route(f'{API_BASE}/features/<int:feature_id>', features_api.FeaturesAPI),
-    Route(f'{API_BASE}/features/<int:feature_id>/approvals',
-        approvals_api.ApprovalsAPI),
-    # TODO(jrobbins): Phase out approvals_api.
-    Route(f'{API_BASE}/features/<int:feature_id>/approvals/<int:field_id>',
-        approvals_api.ApprovalsAPI),
-    Route(f'{API_BASE}/features/<int:feature_id>/configs',
-        approvals_api.ApprovalConfigsAPI),
     Route(f'{API_BASE}/features/<int:feature_id>/votes',
         reviews_api.VotesAPI),
     Route(f'{API_BASE}/features/<int:feature_id>/votes/<int:gate_id>',
@@ -126,6 +120,10 @@ api_routes: list[Route] = [
 
     Route(f'{API_BASE}/blinkcomponents',
         blink_components_api.BlinkComponentsAPI),
+    Route(f'{API_BASE}/componentsusers',
+        components_users.ComponentsUsersAPI),
+    Route(f'{API_BASE}/components/<int:component_id>/users/<int:user_id>',
+        component_users.ComponentUsersAPI),
 
     Route(f'{API_BASE}/login', login_api.LoginAPI),
     Route(f'{API_BASE}/logout', logout_api.LogoutAPI),
@@ -146,27 +144,31 @@ api_routes: list[Route] = [
     # (f'{API_BASE}/metrics/<str:kind>/<int:bucket_id>', TODO),
 ]
 
+# The Routes below that have no handler specified use SPAHandler.
+# The guide.* handlers each call get_spa_template_data().
 spa_page_routes = [
   Route('/'),
   Route('/roadmap'),
   Route('/myfeatures', defaults={'require_signin': True}),
   Route('/newfeatures'),
   Route('/feature/<int:feature_id>'),
-  Route('/guide/new',
+  Route('/guide/new', guide.FeatureCreateHandler,
       defaults={'require_create_feature': True}),
-  Route('/guide/enterprise/new',
+  Route('/guide/enterprise/new', guide.EnterpriseFeatureCreateHandler,
       defaults={'require_create_feature': True}),
-  Route('/guide/edit/<int:feature_id>',
+  Route('/guide/edit/<int:feature_id>', guide.FeatureEditHandler,
       defaults={'require_edit_feature': True}),
-  Route('/guide/stage/<int:feature_id>/<int:stage_id>/<int:intent_stage>',
+  Route('/guide/stage/<int:feature_id>/<int:intent_stage>/<int:stage_id>',
+        guide.FeatureEditHandler,
       defaults={'require_edit_feature': True}),
   Route('/guide/stage/<int:feature_id>/<int:stage_id>',
+        guide.FeatureEditHandler,
       defaults={'require_edit_feature': True}),
-  Route('/guide/edit/<int:feature_id>/<int:stage_id>',
+  Route('/guide/edit/<int:feature_id>/<int:stage_id>', guide.FeatureEditHandler,
       defaults={'require_edit_feature': True}),
-  Route('/guide/editall/<int:feature_id>',
+  Route('/guide/editall/<int:feature_id>', guide.FeatureEditHandler,
       defaults={'require_edit_feature': True}),
-  Route('/guide/verify_accuracy/<int:feature_id>',
+  Route('/guide/verify_accuracy/<int:feature_id>', guide.FeatureEditHandler,
       defaults={'require_edit_feature': True}),
   Route('/guide/stage/<int:feature_id>/metadata',
       defaults={'require_edit_feature': True}),
@@ -183,23 +185,13 @@ spa_page_routes = [
   Route('/metrics/feature/timeline/popularity/<int:bucket_id>'),
   Route('/settings', defaults={'require_signin': True}),
   Route('/enterprise'),
-]
-
-spa_page_post_routes: list[Route] = [
-  Route('/guide/new', guide.FeatureCreateHandler),
-  Route('/guide/enterprise/new', guide.EnterpriseFeatureCreateHandler),
-  Route('/guide/edit/<int:feature_id>', guide.FeatureEditHandler),
-  Route('/guide/stage/<int:feature_id>/<int:intent_stage>',
-      guide.FeatureEditHandler),
-  Route('/guide/stage/<int:feature_id>/<int:intent_stage>/<int:stage_id>/',
-      guide.FeatureEditHandler),
-  Route('/guide/editall/<int:feature_id>', guide.FeatureEditHandler),
-  Route('/guide/verify_accuracy/<int:feature_id>', guide.FeatureEditHandler),
+  Route('/enterprise/releasenotes'),
+  # Admin pages
+  Route('/admin/blink', defaults={'require_admin_site': True, 'require_signin': True}),
 ]
 
 mpa_page_routes: list[Route] = [
     Route('/admin/subscribers', blink_handler.SubscribersHandler),
-    Route('/admin/blink', blink_handler.BlinkHandler),
     Route('/admin/users/new', users.UserListHandler),
 
     Route('/admin/features/launch/<int:feature_id>',
@@ -240,29 +232,12 @@ internals_routes: list[Route] = [
   Route('/tasks/email-subscribers', notifier.FeatureChangeHandler),
   Route('/tasks/detect-intent', detect_intent.IntentEmailHandler),
   Route('/tasks/email-reviewers', notifier.FeatureReviewHandler),
+  Route('/tasks/email-comments', notifier.FeatureCommentHandler),
 
-  Route('/admin/schema_migration_delete_entities',
-      schema_migration.DeleteNewEntities),
-  Route('/admin/schema_migration_comment_activity',
-      schema_migration.MigrateCommentsToActivities),
-  Route('/admin/schema_migration_write_entities',
-      schema_migration.MigrateEntities),
-  Route('/admin/schema_migration_approval_vote',
-      schema_migration.MigrateApprovalsToVotes),
   Route('/admin/schema_migration_gate_status',
       schema_migration.EvaluateGateStatus),
-  Route('/admin/schema_migration_updated_field',
-      schema_migration.WriteUpdatedField),
-  Route('/admin/schema_migration_update_views',
-      schema_migration.UpdateDeprecatedViews),
   Route('/admin/schema_migration_missing_gates',
     schema_migration.WriteMissingGates),
-  Route('/admin/schema_migration_active_stage',
-      schema_migration.CalcActiveStages),
-  Route('/admin/schema_migration_extension_stages',
-    schema_migration.CreateTrialExtensionStages),
-  Route('/admin/schema_migration_subject_line',
-    schema_migration.MigrateSubjectLineField),
   Route('/admin/schema_migration_lgtm_fields',
     schema_migration.MigrateLGTMFields),
 ]
@@ -280,7 +255,7 @@ if settings.DEV_MODE:
 app = basehandlers.FlaskApplication(
     __name__,
     (metrics_chart_routes + api_routes + mpa_page_routes + spa_page_routes +
-     internals_routes + dev_routes), spa_page_post_routes)
+     internals_routes + dev_routes))
 
 # TODO(jrobbins): Make the CSP handler be a class like our others.
 app.add_url_rule(

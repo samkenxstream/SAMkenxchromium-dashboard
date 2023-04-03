@@ -99,7 +99,7 @@ PI_SEC_REVIEW = ProgressItem('Security review issues addressed')
 PI_PRI_REVIEW = ProgressItem('Privacy review issues addressed')
 # TODO(jrobbins): needs detector.
 PI_EXTERNAL_REVIEWS = ProgressItem('External reviews')
-PI_R4DT_EMAIL = ProgressItem('Ready for Trial email', 'ready_for_trial_url')
+PI_R4DT_EMAIL = ProgressItem('Ready for Trial email', 'announcement_url')
 
 PI_TAG_REQUESTED = ProgressItem('TAG review requested', 'tag_review')
 PI_VENDOR_SIGNALS = ProgressItem('Vendor signals', 'safari_views')
@@ -156,6 +156,7 @@ PI_EXISTING_FEATURE = ProgressItem('Link to existing feature')
 
 PI_CODE_REMOVED = ProgressItem('Code removed')
 
+PI_ROLLOUT_IMPACT = ProgressItem('Rollout impact', 'rollout_impact')
 PI_ROLLOUT_MILESTONE = ProgressItem('Rollout milestone', 'rollout_milestone')
 PI_ROLLOUT_PLATFORMS = ProgressItem('Rollout platforms', 'rollout_platforms')
 PI_ROLLOUT_DETAILS = ProgressItem('Rollout details', 'rollout_details')
@@ -170,7 +171,8 @@ FEATURE_ROLLOUT_STAGE = ProcessStage(
       'Create feature flag for the feature. '
       'Create policies to enable/disable and control the feature. '
       'Finalize docs and announcements and start rolling out the feature.',
-      [PI_ROLLOUT_MILESTONE,
+      [PI_ROLLOUT_IMPACT,
+       PI_ROLLOUT_MILESTONE,
        PI_ROLLOUT_PLATFORMS,
        PI_ROLLOUT_DETAILS,
        PI_ENTERPRISE_POLICIES,
@@ -537,7 +539,8 @@ ENTERPRISE_STAGES = [
       'Create feature flag for the feature. '
       'Create policies to enable/disable and control the feature. '
       'Finalize docs and announcements and start rolling out the feature.',
-      [PI_ROLLOUT_MILESTONE,
+      [PI_ROLLOUT_IMPACT,
+       PI_ROLLOUT_MILESTONE,
        PI_ROLLOUT_PLATFORMS,
        PI_ROLLOUT_DETAILS,
        PI_ENTERPRISE_POLICIES,
@@ -546,15 +549,6 @@ ENTERPRISE_STAGES = [
       [],
       core_enums.INTENT_NONE, core_enums.INTENT_ROLLOUT,
       stage_type=core_enums.STAGE_ENT_ROLLOUT),
-  ProcessStage(
-      'Ship',
-      'Enable the feature by default.',
-      [PI_FINAL_TARGET_MILESTONE,
-      ],
-      [],
-      [],
-      core_enums.INTENT_ROLLOUT, core_enums.INTENT_SHIPPED,
-      stage_type=core_enums.STAGE_ENT_SHIPPED),
 ]
 
 
@@ -712,6 +706,10 @@ PROGRESS_DETECTORS = {
 
     'Code removed':
     lambda f, _: f.impl_status_chrome == core_enums.REMOVED,
+
+    'Rollout impact':
+    lambda f, stages: stages[core_enums.STAGE_TYPES_ROLLOUT[f.feature_type]] and
+        stages[core_enums.STAGE_TYPES_ROLLOUT[f.feature_type]][0].rollout_impact,
 
     'Rollout milestone':
     lambda f, stages: stages[core_enums.STAGE_TYPES_ROLLOUT[f.feature_type]] and

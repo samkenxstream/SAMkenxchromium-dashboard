@@ -1,4 +1,5 @@
 import {LitElement, css, html, nothing} from 'lit';
+import {getStageValue} from './utils';
 import {openAddStageDialog} from './chromedash-add-stage-dialog';
 import {makeDisplaySpecs} from './form-field-specs';
 import {
@@ -7,6 +8,7 @@ import {
   FLAT_TRIAL_EXTENSION_FIELDS,
   FORMS_BY_STAGE_TYPE,
   OT_EXTENSION_STAGE_MAPPING,
+  STAGE_TYPES_ORIGIN_TRIAL,
 } from './form-definition';
 
 import {
@@ -15,7 +17,8 @@ import {
   PLATFORMS_DISPLAYNAME,
   STAGE_SPECIFIC_FIELDS,
   OT_MILESTONE_END_FIELDS,
-  ENTERPRISE_FEATURE_CATEGORIES_DISPLAYNAME} from './form-field-enums';
+  ENTERPRISE_FEATURE_CATEGORIES_DISPLAYNAME,
+  ROLLOUT_IMPACT_DISPLAYNAME} from './form-field-enums';
 import '@polymer/iron-icon';
 import './chromedash-activity-log';
 import './chromedash-callout';
@@ -257,15 +260,16 @@ class ChromedashFeatureDetail extends LitElement {
   // Look at all extension milestones and calculate the highest milestone that an origin trial
   // is available. This is used to display the highest milestone available, but to preserve the
   // milestone that the trial was originally available for without extensions.
-  calcMaxMilestone(fieldName, feStage) {
+  calcMaxMilestone(feStage, fieldName) {
     // If the max milestone has already been calculated, or no trial extensions exist, do nothing.
     if (feStage[`max_${fieldName}`] || !feStage.extensions) {
       return;
     }
-    let maxMilestone = feStage[fieldName];
+    let maxMilestone = getStageValue(feStage, fieldName) || 0;
     for (const extension of feStage.extensions) {
-      if (extension[fieldName]) {
-        maxMilestone = Math.max(maxMilestone, extension[fieldName]);
+      const extensionValue = getStageValue(extension, fieldName);
+      if (extensionValue) {
+        maxMilestone = Math.max(maxMilestone, extensionValue);
       }
     }
     // Save the findings with the "max_" prefix as a prop of the stage for reference.
@@ -273,33 +277,35 @@ class ChromedashFeatureDetail extends LitElement {
   }
 
   // Get the milestone value that is displayed to the user regarding the origin trial end date.
-  getMilestoneExtensionValue(fieldName, feStage) {
-    const milestoneFieldName = OT_MILESTONE_END_FIELDS[fieldName];
-    this.calcMaxMilestone(milestoneFieldName, feStage);
+  getMilestoneExtensionValue(feStage, fieldName) {
+    const milestoneValue = getStageValue(feStage, fieldName);
+    this.calcMaxMilestone(feStage, fieldName);
 
-    const maxMilestoneFieldName = `max_${milestoneFieldName}`;
+    const maxMilestoneFieldName = `max_${fieldName}`;
     // Display only extension milestone if the original milestone has not been added.
-    if (feStage[maxMilestoneFieldName] && !feStage[fieldName]) {
+    if (feStage[maxMilestoneFieldName] && !milestoneValue) {
       return `Extended to ${feStage[maxMilestoneFieldName]}`;
     }
     // If the trial has been extended past the original milestone, display the extension
     // milestone with additional text reminding of the original milestone end date.
-    if (feStage[maxMilestoneFieldName] && feStage[maxMilestoneFieldName] > feStage[fieldName]) {
-      return `${feStage[maxMilestoneFieldName]} (extended from ${feStage[milestoneFieldName]})`;
+    if (feStage[maxMilestoneFieldName] && feStage[maxMilestoneFieldName] > milestoneValue) {
+      return `${feStage[maxMilestoneFieldName]} (extended from ${milestoneValue})`;
     }
-    return feStage[fieldName];
+    return milestoneValue;
   }
 
   getFieldValue(fieldName, feStage) {
     if (STAGE_SPECIFIC_FIELDS.has(fieldName)) {
-      const value = feStage[fieldName];
-      if (fieldName === 'rollout_platforms' && value) {
+      const value = getStageValue(feStage, fieldName);
+      if (fieldName === 'rollout_impact' && value) {
+        return ROLLOUT_IMPACT_DISPLAYNAME[value];
+      } if (fieldName === 'rollout_platforms' && value) {
         return value.map(platformId => PLATFORMS_DISPLAYNAME[platformId]);
       } else if (fieldName in OT_MILESTONE_END_FIELDS) {
         // If an origin trial end date is being displayed, handle extension milestones as well.
-        return this.getMilestoneExtensionValue(fieldName, feStage);
+        return this.getMilestoneExtensionValue(feStage, fieldName);
       }
-      return feStage[fieldName];
+      return value;
     }
 
     let value = this.feature[fieldName];
@@ -331,7 +337,7 @@ class ChromedashFeatureDetail extends LitElement {
       web_dev_views_notes: 'browsers.webdev.view.notes',
       other_views_notes: 'browsers.other.view.notes',
     };
-    if (!value && fieldNameMapping[fieldName]) {
+    if (fieldNameMapping[fieldName]) {
       value = this.feature;
       for (const step of fieldNameMapping[fieldName].split('.')) {
         if (value) {
@@ -559,18 +565,21 @@ class ChromedashFeatureDetail extends LitElement {
     let numberDifferentiation = '';
     if (this.previousStageTypeRendered === feStage.stage_type) {
       this.sameTypeRendered += 1;
-      numberDifferentiation = ` (${this.sameTypeRendered})`;
+      numberDifferentiation = ` ${this.sameTypeRendered}`;
     } else {
       this.previousStageTypeRendered = feStage.stage_type;
       this.sameTypeRendered = 1;
     }
 
-    const name = `${processStage.name}${numberDifferentiation}`;
+    let name = `${processStage.name}${numberDifferentiation}`;
+    if (feStage.display_name) {
+      name = `${processStage.name}: ${feStage.display_name}`;
+    }
     const isActive = this.feature.active_stage_id === feStage.id;
 
     // Show a button to add a trial extension stage for origin trial stages.
     let addExtensionButton = nothing;
-    if (this.canEdit && 'extensions' in feStage) {
+    if (this.canEdit && STAGE_TYPES_ORIGIN_TRIAL.has(feStage.stage_type)) {
       // Button text changes based on whether or not an extension stage already exists.
       const extensionAlreadyExists = (feStage.extensions && feStage.extensions.length > 0);
       const extensionButtonText = extensionAlreadyExists ?
